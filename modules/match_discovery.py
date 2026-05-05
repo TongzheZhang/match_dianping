@@ -151,30 +151,57 @@ class MatchDiscovery:
 
     def _parse_match_from_title(self, title: str, date_str: str) -> Dict[str, Any] | None:
         """从搜索标题解析比赛信息"""
-        # 常见格式: "Team A vs Team B" / "Team A v Team B" / "Team A - Team B"
-        patterns = [
-            r'([A-Za-z\s]+?)\s+(?:vs|v|VS|–|-)\s+([A-Za-z\s]+?)(?:\s*[\|:\-–]|$)',
+        # 过滤掉明显不是比赛的标题
+        noise_words = ["schedule", "fixtures", "results", "table", "news", "stadiums",
+                       "fifa", "espn", "bbc", "sky sports", "the athletic", "youtube",
+                       "highlights", "transfer", "podcast", "betting", "odds", "preview"]
+        title_lower = title.lower()
+        for noise in noise_words:
+            if noise in title_lower:
+                return None
+
+        # 常见格式: "Team A vs Team B" / "Team A v Team B"
+        # 优先匹配知名球队名称（避免把媒体名当成球队）
+        known_teams = [
+            "arsenal", "liverpool", "manchester city", "manchester united", "chelsea",
+            "tottenham", "real madrid", "barcelona", "atletico madrid", "bayern munich",
+            "borussia dortmund", "paris saint-germain", "psg", "inter milan", "ac milan",
+            "juventus", "napoli", "manchester", "bayern", "dortmund", "leipzig",
+            "arsenal", "monaco", "marseille", "lyon", "ajax", "porto", "benfica",
         ]
-        for pattern in patterns:
-            match = re.search(pattern, title)
-            if match:
-                home = match.group(1).strip()
-                away = match.group(2).strip()
-                if len(home) > 2 and len(away) > 2 and home != away:
-                    return {
-                        "id": generate_id(home, away, date_str),
-                        "match_api_id": 0,
-                        "competition": "未知联赛",
-                        "competition_code": "0",
-                        "home_team": home,
-                        "away_team": away,
-                        "home_team_id": 0,
-                        "away_team_id": 0,
-                        "match_date": date_str,
-                        "match_time": "",
-                        "status": "SCHEDULED",
-                    }
-        return None
+
+        # 提取 vs/v 两边的文本
+        match = re.search(r'([A-Za-z\s]+?)\s+(?:vs|v|VS)\s+([A-Za-z\s]+?)(?:\s*[\|:\-–,]|$)', title)
+        if not match:
+            return None
+
+        home = match.group(1).strip()
+        away = match.group(2).strip()
+
+        # 长度校验
+        if len(home) < 3 or len(away) < 3 or len(home) > 30 or len(away) > 30 or home.lower() == away.lower():
+            return None
+
+        # 至少有一方是已知球队（降低误报）
+        home_lower = home.lower()
+        away_lower = away.lower()
+        is_known = any(t in home_lower or t in away_lower for t in known_teams)
+        if not is_known:
+            return None
+
+        return {
+            "id": generate_id(home, away, date_str),
+            "match_api_id": 0,
+            "competition": "未知联赛",
+            "competition_code": "0",
+            "home_team": home,
+            "away_team": away,
+            "home_team_id": 0,
+            "away_team_id": 0,
+            "match_date": date_str,
+            "match_time": "",
+            "status": "SCHEDULED",
+        }
 
     def _fetch_competition_matches(
         self, comp_id: int, date_from: str, date_to: str
