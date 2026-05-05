@@ -1,4 +1,4 @@
-"""AI 处理模块 - 调用 Kimi API 进行翻译和分析"""
+"""AI 处理模块 - 调用 OpenRouter API 进行翻译和分析"""
 import os
 from typing import Dict, Any, List
 from openai import OpenAI
@@ -9,16 +9,20 @@ from utils.helpers import truncate_text
 
 
 class AIProcessor:
-    """使用 Kimi LLM 进行赛前分析"""
+    """使用 OpenRouter LLM 进行赛前分析"""
 
     def __init__(self):
         self.client = OpenAI(
-            api_key=settings.kimi_api_key or os.getenv("KIMI_API_KEY", ""),
-            base_url=settings.kimi_base_url,
+            api_key=settings.openrouter_api_key or os.getenv("OPENROUTER_API_KEY", ""),
+            base_url=settings.openrouter_base_url,
         )
-        self.model = settings.kimi_model
+        self.model = settings.openrouter_model
         self.temperature = settings.llm_temperature
         self.max_tokens = settings.llm_max_tokens
+        self.extra_headers = {
+            "HTTP-Referer": settings.openrouter_referer,
+            "X-Title": settings.openrouter_title,
+        }
 
     def analyze_match(
         self,
@@ -27,10 +31,8 @@ class AIProcessor:
         team_data: str,
     ) -> Dict[str, Any]:
         """分析单场比赛并生成中文彩经"""
-        # 准备文章文本
         articles_text = self._format_articles(articles)
 
-        # 构建 Prompt
         prompt = MATCH_ANALYSIS_PROMPT.format(
             competition=match["competition"],
             home_team=match["home_team"],
@@ -40,10 +42,11 @@ class AIProcessor:
             articles=articles_text,
         )
 
-        logger.info(f"开始AI分析: {match['home_team']} vs {match['away_team']}")
+        logger.info(f"开始AI分析: {match['home_team']} vs {match['away_team']} (模型: {self.model})")
 
         try:
             response = self.client.chat.completions.create(
+                extra_headers=self.extra_headers,
                 model=self.model,
                 messages=[
                     {"role": "system", "content": "你是一个专业的足球分析师和中文体育撰稿人。"},
@@ -54,7 +57,6 @@ class AIProcessor:
             )
             content = response.choices[0].message.content
 
-            # 提取预测信息
             prediction = self._extract_prediction(content)
 
             return {
@@ -80,13 +82,13 @@ class AIProcessor:
             return "今日暂无分析数据。"
 
         combined = "\n\n---\n\n".join(analyses)
-        # 控制总长度
         combined = truncate_text(combined, 12000)
 
         prompt = SUMMARY_PROMPT.format(all_analyses=combined)
 
         try:
             response = self.client.chat.completions.create(
+                extra_headers=self.extra_headers,
                 model=self.model,
                 messages=[
                     {"role": "system", "content": "你是一个足球赛事综述专家。"},
@@ -110,7 +112,6 @@ class AIProcessor:
             title = article.get("title", "无标题")
             source = article.get("source", "未知来源")
             content = article.get("content", "")
-            # 每篇文章取前2000字
             content = truncate_text(content, 2000)
             parts.append(
                 f"### 文章 {i}\n"
@@ -125,7 +126,6 @@ class AIProcessor:
         import re
         result = {"score": "", "direction": "", "confidence": "中"}
 
-        # 提取比分预测 - 常见格式如 "比分预测：2:1" 或 "预测比分：2-1"
         score_patterns = [
             r'比分预测[：:]\s*([\d\-:\s,、]+)',
             r'预测比分[：:]\s*([\d\-:\s,、]+)',
@@ -136,11 +136,9 @@ class AIProcessor:
                 result["score"] = match.group(1).strip()[:50]
                 break
 
-        # 提取方向判断
         direction_keywords = ["主胜", "客胜", "平局", "让球", "大球", "小球"]
         for kw in direction_keywords:
             if kw in content:
-                # 找包含关键词的句子
                 sentences = re.split(r'[。！\n]', content)
                 for s in sentences:
                     if kw in s and len(s) < 80:
@@ -149,7 +147,6 @@ class AIProcessor:
                 if result["direction"]:
                     break
 
-        # 置信度
         if "信心较高" in content or "高信心" in content:
             result["confidence"] = "高"
         elif "信心较低" in content or "难以判断" in content:

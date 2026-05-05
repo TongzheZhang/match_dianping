@@ -8,7 +8,7 @@ PROJECT_ROOT = Path(__file__).parent.parent
 
 class Settings(BaseSettings):
     # API Keys
-    kimi_api_key: str = ""
+    openrouter_api_key: str = ""
     football_data_api_key: str = ""
 
     # Paths
@@ -26,9 +26,11 @@ class Settings(BaseSettings):
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     )
 
-    # LLM
-    kimi_model: str = "kimi-k2.5"
-    kimi_base_url: str = "https://api.moonshot.cn/v1"
+    # OpenRouter LLM
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    openrouter_model: str = "deepseek/deepseek-chat"  # 性价比最好的中文模型
+    openrouter_referer: str = "https://github.com/TongzheZhang/match_dianping"
+    openrouter_title: str = "MatchDianping"
     llm_temperature: float = 0.3
     llm_max_tokens: int = 8192
 
@@ -36,7 +38,6 @@ class Settings(BaseSettings):
     football_data_base_url: str = "https://api.football-data.org/v4"
 
     # Target competitions (五大联赛 + 欧冠)
-    # football-data.org competition codes
     target_competitions: list[int] = [
         2021,  # 英超 Premier League
         2014,  # 西甲 La Liga

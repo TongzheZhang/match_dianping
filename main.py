@@ -32,22 +32,23 @@ def parse_args():
     parser.add_argument("--max-articles", type=int, default=5, help="每场比赛采集文章数")
     parser.add_argument("--init-db", action="store_true", help="仅初始化数据库")
     parser.add_argument("--skip-ai", action="store_true", help="跳过AI分析（仅采集数据）")
+    parser.add_argument("--demo", action="store_true", help="演示模式：使用预定义焦点比赛测试AI链路")
     return parser.parse_args()
 
 
 def check_api_keys():
     """检查必要的API密钥"""
     missing = []
-    if not settings.kimi_api_key:
-        missing.append("KIMI_API_KEY")
+    if not settings.openrouter_api_key:
+        missing.append("OPENROUTER_API_KEY")
     if not settings.football_data_api_key:
         missing.append("FOOTBALL_DATA_API_KEY (可选，但强烈建议配置)")
 
     if missing:
         logger.warning(f"缺少环境变量: {', '.join(missing)}")
         logger.warning("请复制 .env.example 为 .env 并填入你的 API Key")
-        if "KIMI_API_KEY" in missing:
-            logger.error("KIMI_API_KEY 是必需的，程序无法继续")
+        if "OPENROUTER_API_KEY" in missing:
+            logger.error("OPENROUTER_API_KEY 是必需的，程序无法继续")
             return False
     return True
 
@@ -73,8 +74,12 @@ def main():
     output = OutputManager()
 
     # 1. 发现比赛
-    print(f"\n🔍 正在发现未来 {args.days} 天的比赛...")
-    matches = discovery.get_matches(days_ahead=args.days)
+    if args.demo:
+        print("\n🎮 演示模式：使用预定义焦点比赛")
+        matches = discovery.get_demo_matches()
+    else:
+        print(f"\n🔍 正在发现未来 {args.days} 天的比赛...")
+        matches = discovery.get_matches(days_ahead=args.days)
 
     if not matches:
         print("未找到符合条件的比赛。")
